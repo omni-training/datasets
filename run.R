@@ -1,39 +1,42 @@
 #!/usr/bin/env Rscript
 
-library(argparse)
-library(zellkonverter)
-library(SingleCellExperiment)
+suppressPackageStartupMessages({
+  library(argparse)
+  library(zellkonverter)
+  library(SingleCellExperiment)
+})
 
 parser <- ArgumentParser(description = "Benchmarking entrypoint")
 
-parser$add_argument(
-  "--output_dir", "-o",
-  dest = "output_dir", type = "character",
-  help = "output directory where files will be saved",
-  default = getwd(), required = TRUE
-)
-parser$add_argument(
-  "--name", "-n",
-  dest = "name", type = "character",
-  help = "name of the module",
-  required = TRUE
-)
-parser$add_argument(
-  "--dataset_name",
-  dest = "dataset_name", type = "character",
-  help = "name of the dataset",
-  choices = c("sc-mix", "be1", "cb", "1.3m"), required = TRUE
-)
+# dummy args (old API)
+parser$add_argument("--output_dir", dest = "output_dir")
+parser$add_argument("--name", dest = "name")
+
+# parameters
+parser$add_argument("--dataset_name", dest = "dataset_name", type = "character",
+                    help = "name of the dataset", 
+                    choices = c("sc-mix", "be1", "cb", "1.3m"), required = TRUE)
+parser$add_argument("--output", action = "append", default = list(),
+                    help = "Repeatable: key=path")
 
 args <- parser$parse_args()
 
-h5ad_path <- file.path(args$output_dir, paste0(args$name, ".h5ad"))
-clusters_truth_path <- file.path(
-  args$output_dir, paste0(args$name, ".clusters_truth.tsv")
-)
-num_clusters_truth_path <- file.path(
-  args$output_dir, paste0(args$name, ".clusters_truth_num.txt")
-)
+output <- setNames(sub("^[^=]*=", "", args$output), 
+                   sub("=.*$", "", args$output))
+
+# logging
+cat(sprintf("Full command: %s\n", paste(commandArgs(trailingOnly = FALSE), collapse = " ")))
+
+cat(sprintf("LOG: command line args\n----------------------------------\n"))
+for (i in 1:length(args)) {
+  cat(sprintf("  %s: %s\n", names(args)[i], args[[i]]))
+}
+for (i in 1:length(output)) {
+  cat(sprintf("[output] %s: %s\n", names(output)[i], output[[i]]))
+}
+cat(sprintf("----------------------------------\n"))
+
+# set outputs
 
 make_qc_df <- function(
   nFeature_min = NA_real_, nFeature_max = NA_real_,
@@ -53,8 +56,10 @@ if (args$dataset_name == "sc-mix") {
   options(timeout=180)
   #url <- "https://github.com/LuyiTian/sc_mixology/raw/refs/heads/master/data/sincell_with_class_5cl.RData"
   url <- "https://omnibenchmark.mls.uzh.ch/datasets/sc-mix/sincell_with_class_5cl.RData"
+  #url <- "file:///Users/mark/projects/omb/omni-training/sincell_with_class_5cl.RData" # for local
   bn <- basename(url)
-  raw_path <- file.path(args$output_dir, bn)
+  #raw_path <- file.path(args$output_dir, bn)
+  raw_path <- file.path(tempdir(), bn)
   if (!file.exists(raw_path)) {
     download.file(url, destfile = raw_path)
   }
@@ -80,11 +85,13 @@ if (args$dataset_name == "sc-mix") {
   gse_id <- "GSE243665"
   getGEOSuppFiles(
     GEO = gse_id,
-    baseDir = args$output_dir
+    #baseDir = args$output_dir
+    baseDir = tempdir()
   )
 
   # collect compressed matrix/feature/barcode files across samples
-  raw_dir <- file.path(args$output_dir, gse_id)
+  #raw_dir <- file.path(args$output_dir, gse_id)
+  raw_dir <- file.path(temp_dir(), gse_id)
   files <- list.files(
     raw_dir,
     pattern = "\\.(mtx|tsv)\\.gz$", full.names = TRUE
@@ -176,14 +183,12 @@ if (args$dataset_name == "sc-mix") {
 sce <- sce[, !is.na(colData(sce)$clusters.truth)]
 
 # write outputs
-writeH5AD(sce, file = h5ad_path, compression = "gzip")
-write.table(
-  data.frame(
-    cell_id = colnames(sce),
-    truths = sce$clusters.truth
-  ),
-  clusters_truth_path,
-  sep = "\t", quote = FALSE, row.names = FALSE
-)
-clusters_truth_num <- length(unique(sce$clusters.truth))
-writeLines(as.character(clusters_truth_num), con = num_clusters_truth_path)
+# h5ad ----------------------------------------------------------------------
+writeH5AD(sce, file = output[["data_h5ad"]], compression = "gzip")
+# ground truth clusters -----------------------------------------------------
+write.table( data.frame(cell_id = colnames(sce), truths = sce$clusters.truth),
+             output[["data_clusters_truth"]],
+             sep = "\t", quote = FALSE, row.names = FALSE)
+# number of clusters --------------------------------------------------------
+writeLines(as.character(length(unique(sce$clusters.truth))), 
+           con = output[["data_clusters_truth_num"]])
