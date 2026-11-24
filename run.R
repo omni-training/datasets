@@ -184,7 +184,8 @@ sce <- sce[, !is.na(colData(sce)$clusters.truth)]
 
 # write outputs
 # h5ad ----------------------------------------------------------------------
-write_h5ad(sce, path = output[["data_h5ad"]])
+adata <- as_AnnData(sce, x_mapping = "counts")   
+write_h5ad(adata, path = output[["data_h5ad"]])
 # ground truth clusters -----------------------------------------------------
 write.table( data.frame(cell_id = colnames(sce), truths = sce$clusters.truth),
              output[["data_clusters_truth"]],
