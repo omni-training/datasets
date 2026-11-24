@@ -2,7 +2,7 @@
 
 suppressPackageStartupMessages({
   library(argparse)
-  library(zellkonverter)
+  library(anndataR)
   library(SingleCellExperiment)
 })
 
@@ -184,7 +184,7 @@ sce <- sce[, !is.na(colData(sce)$clusters.truth)]
 
 # write outputs
 # h5ad ----------------------------------------------------------------------
-writeH5AD(sce, file = output[["data_h5ad"]], compression = "gzip")
+write_h5ad(sce, file = output[["data_h5ad"]], compression = "gzip")
 # ground truth clusters -----------------------------------------------------
 write.table( data.frame(cell_id = colnames(sce), truths = sce$clusters.truth),
              output[["data_clusters_truth"]],
