@@ -67,6 +67,8 @@ if (args$dataset_name == "sc-mix") {
   load(raw_path)
   sce <- sce_sc_10x_5cl_qc
   counts(sce) <- as(counts(sce), 'dgCMatrix') # make sparse
+  assay(sce, "cpm") <- NULL                   # remove excess
+  assay(sce, "logcounts") <- NULL
   file.remove(raw_path)
 
   # use provided cell line annotations as ground-truth labels
